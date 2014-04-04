@@ -59,6 +59,7 @@ import com.google.sample.castcompanionlibrary.utils.LogUtils;
 import com.google.sample.castcompanionlibrary.utils.Utils;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -97,7 +98,8 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
     protected CastMediaRouterCallback mMediaRouterCallback;
     protected CastDevice mSelectedCastDevice;
     protected String mDeviceName;
-    private final Set<IBaseCastConsumer> mBaseCastConsumers = new HashSet<IBaseCastConsumer>();
+    private final Set<IBaseCastConsumer> mBaseCastConsumers = Collections
+            .synchronizedSet(new HashSet<IBaseCastConsumer>());
     private boolean mDestroyOnDisconnect = false;
     protected String mApplicationId;
     protected Handler mHandler;
@@ -111,6 +113,7 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
     protected boolean mConnectionSuspened;
     private boolean mWifiConnectivity = true;
     protected static BaseCastManager mCastManager;
+    protected String mSessionId;
 
     /*************************************************************************/
     /************** Abstract Methods *****************************************/
@@ -241,13 +244,13 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
                     }
                 }
             } catch (IllegalStateException e) {
-                LOGE(TAG, "Failed to stop the application after disconecting route", e);
+                LOGE(TAG, "Failed to stop the application after disconnecting route", e);
             } catch (IOException e) {
-                LOGE(TAG, "Failed to stop the application after disconecting route", e);
+                LOGE(TAG, "Failed to stop the application after disconnecting route", e);
             } catch (TransientNetworkDisconnectionException e) {
-                LOGE(TAG, "Failed to stop the application after disconecting route", e);
+                LOGE(TAG, "Failed to stop the application after disconnecting route", e);
             } catch (NoConnectionException e) {
-                LOGE(TAG, "Failed to stop the application after disconecting route", e);
+                LOGE(TAG, "Failed to stop the application after disconnecting route", e);
             }
             onDisconnected();
             onDeviceUnselected();
@@ -259,6 +262,7 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
                 }
                 mApiClient = null;
             }
+            mSessionId = null;
         } else if (null == mApiClient) {
             LOGD(TAG, "acquiring a conenction to Google Play services for " + mSelectedCastDevice);
             Cast.CastOptions.Builder apiOptionsBuilder = getCastOptionBuilder(mSelectedCastDevice);
@@ -276,11 +280,13 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
     @Override
     public void onCastDeviceDetected(RouteInfo info) {
         if (null != mBaseCastConsumers) {
-            for (IBaseCastConsumer consumer : mBaseCastConsumers) {
-                try {
-                    consumer.onCastDeviceDetected(info);
-                } catch (Exception e) {
-                    LOGE(TAG, "onCastDeviceDetected(): Failed to inform " + consumer, e);
+            synchronized (mBaseCastConsumers) {
+                for (IBaseCastConsumer consumer : mBaseCastConsumers) {
+                    try {
+                        consumer.onCastDeviceDetected(info);
+                    } catch (Exception e) {
+                        LOGE(TAG, "onCastDeviceDetected(): Failed to inform " + consumer, e);
+                    }
                 }
             }
         }
@@ -546,6 +552,27 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
         }
     }
 
+    /**
+     * Clears the {@link android.content.Context}. Should be used when the client application is
+     * being destroyed to avoid context leak.
+     */
+    public void clearContext(){
+        this.mContext = null;
+    }
+
+    /**
+     * Clears the {@link android.content.Context} if the current context is the same as the one
+     * provided in the argument <code>context</code>. Should be used when the client application
+     * is being destroyed to avoid context leak.
+     *
+     * @param context
+     */
+    public void clearContext(Context context){
+        if (null != this.mContext && this.mContext == context) {
+            this.mContext = null;
+        }
+    }
+
     /*************************************************************************/
     /************** Session Recovery Methods *********************************/
     /*************************************************************************/
@@ -573,11 +600,12 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
      * recovery. For this to return <code>true</code>, there needs to be persisted session ID and
      * route ID from the last successful launch.
      *
+     * @param context
      * @return
      */
-    public final boolean canConsiderSessionRecovery() {
-        String sessionId = Utils.getStringFromPreference(mContext, PREFS_KEY_SESSION_ID);
-        String routeId = Utils.getStringFromPreference(mContext, PREFS_KEY_ROUTE_ID);
+    public final boolean canConsiderSessionRecovery(Context context) {
+        String sessionId = Utils.getStringFromPreference(context, PREFS_KEY_SESSION_ID);
+        String routeId = Utils.getStringFromPreference(context, PREFS_KEY_ROUTE_ID);
         if (null == sessionId || null == routeId) {
             return false;
         }
@@ -637,8 +665,9 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
         if (isConnected()) {
             return;
         }
-        String routeId = Utils.getStringFromPreference(mContext, PREFS_KEY_ROUTE_ID);
-        if (canConsiderSessionRecovery()) {
+        LOGD(TAG, "reconnectSessionIfPossible()");
+        String routeId = Utils.getStringFromPreference(context, PREFS_KEY_ROUTE_ID);
+        if (canConsiderSessionRecovery(context)) {
             List<RouteInfo> routes = mMediaRouter.getRoutes();
             RouteInfo theRoute = null;
             if (null != routes && !routes.isEmpty()) {
@@ -726,7 +755,8 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
                                     }
                                     mReconnectionTask.cancel(true);
                                 }
-                            });
+                            }
+                    );
                     dlg.show();
                 }
 
@@ -784,6 +814,7 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
      * @param showDialog if set to <code>true</code>, a dialog will be shown
      */
     public void reconnectSessionIfPossible(final Context context, final boolean showDialog) {
+        LOGD(TAG, "Context for calling reconnectSessionIfPossible(): " + context);
         reconnectSessionIfPossible(context, showDialog, SESSION_RECOVERY_TIMEOUT);
     }
 
@@ -795,11 +826,15 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
      * disconnect. Note: this is not called by SDK.
      */
     public void onConnectivityRecovered() {
-        for (IBaseCastConsumer consumer : mBaseCastConsumers) {
-            try {
-                consumer.onConnectivityRecovered();
-            } catch (Exception e) {
-                LOGE(TAG, "onConnectivityRecovered: Failed to inform " + consumer, e);
+        if (null != mBaseCastConsumers) {
+            synchronized (mBaseCastConsumers) {
+                for (IBaseCastConsumer consumer : mBaseCastConsumers) {
+                    try {
+                        consumer.onConnectivityRecovered();
+                    } catch (Exception e) {
+                        LOGE(TAG, "onConnectivityRecovered: Failed to inform " + consumer, e);
+                    }
+                }
             }
         }
     }
@@ -828,11 +863,13 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
             launchApp();
 
             if (null != mBaseCastConsumers) {
-                for (IBaseCastConsumer consumer : mBaseCastConsumers) {
-                    try {
-                        consumer.onConnected();
-                    } catch (Exception e) {
-                        LOGE(TAG, "onConnected: Failed to inform " + consumer, e);
+                synchronized (mBaseCastConsumers) {
+                    for (IBaseCastConsumer consumer : mBaseCastConsumers) {
+                        try {
+                            consumer.onConnected();
+                        } catch (Exception e) {
+                            LOGE(TAG, "onConnected: Failed to inform " + consumer, e);
+                        }
                     }
                 }
             }
@@ -857,11 +894,13 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
         LOGD(TAG, "onDisconnected() reached");
         mDeviceName = null;
         if (null != mBaseCastConsumers) {
-            for (IBaseCastConsumer consumer : mBaseCastConsumers) {
-                try {
-                    consumer.onDisconnected();
-                } catch (Exception e) {
-                    LOGE(TAG, "onDisconnected(): Failed to inform " + consumer, e);
+            synchronized (mBaseCastConsumers) {
+                for (IBaseCastConsumer consumer : mBaseCastConsumers) {
+                    try {
+                        consumer.onDisconnected();
+                    } catch (Exception e) {
+                        LOGE(TAG, "onDisconnected(): Failed to inform " + consumer, e);
+                    }
                 }
             }
         }
@@ -883,11 +922,13 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
         }
         boolean showError = false;
         if (null != mBaseCastConsumers) {
-            for (IBaseCastConsumer consumer : mBaseCastConsumers) {
-                try {
-                    consumer.onConnectionFailed(result);
-                } catch (Exception e) {
-                    LOGE(TAG, "onConnectionFailed(): Failed to inform " + consumer, e);
+            synchronized (mBaseCastConsumers) {
+                for (IBaseCastConsumer consumer : mBaseCastConsumers) {
+                    try {
+                        consumer.onConnectionFailed(result);
+                    } catch (Exception e) {
+                        LOGE(TAG, "onConnectionFailed(): Failed to inform " + consumer, e);
+                    }
                 }
             }
         }
@@ -900,11 +941,15 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
     public void onConnectionSuspended(int cause) {
         mConnectionSuspened = true;
         LOGD(TAG, "onConnectionSuspended() was called with cause: " + cause);
-        for (IBaseCastConsumer consumer : mBaseCastConsumers) {
-            try {
-                consumer.onConnectionSuspended(cause);
-            } catch (Exception e) {
-                LOGE(TAG, "onConnectionSuspended(): Failed to inform " + consumer, e);
+        if (null != mBaseCastConsumers) {
+            synchronized (mBaseCastConsumers) {
+                for (IBaseCastConsumer consumer : mBaseCastConsumers) {
+                    try {
+                        consumer.onConnectionSuspended(cause);
+                    } catch (Exception e) {
+                        LOGE(TAG, "onConnectionSuspended(): Failed to inform " + consumer, e);
+                    }
+                }
             }
         }
     }
@@ -942,7 +987,8 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
                                 onApplicationConnectionFailed(result.getStatus().getStatusCode());
                             }
                         }
-                    });
+                    }
+            );
         } else {
             LOGD(TAG, "Launching app");
             Cast.CastApi.launchApplication(mApiClient, mApplicationId).setResultCallback(
@@ -960,7 +1006,8 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
                                 onApplicationConnectionFailed(result.getStatus().getStatusCode());
                             }
                         }
-                    });
+                    }
+            );
         }
     }
 
@@ -975,7 +1022,7 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
     public void stopApplication() throws IllegalStateException, IOException,
             TransientNetworkDisconnectionException, NoConnectionException {
         checkConnectivity();
-        Cast.CastApi.stopApplication(mApiClient).setResultCallback(new ResultCallback<Status>() {
+        Cast.CastApi.stopApplication(mApiClient, mSessionId).setResultCallback(new ResultCallback<Status>() {
 
             @Override
             public void onResult(Status result) {
@@ -999,10 +1046,12 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
      * @see BaseCastConsumerImpl
      * @param listener
      */
-    public synchronized void addBaseCastConsumer(IBaseCastConsumer listener) {
+    public void addBaseCastConsumer(IBaseCastConsumer listener) {
         if (null != listener) {
-            if (mBaseCastConsumers.add(listener)) {
-                LOGD(TAG, "Successfully added the new BaseCastConsumer listener " + listener);
+            synchronized (mBaseCastConsumers) {
+                if (mBaseCastConsumers.add(listener)) {
+                    LOGD(TAG, "Successfully added the new BaseCastConsumer listener " + listener);
+                }
             }
         }
     }
@@ -1012,11 +1061,13 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
      *
      * @param listener
      */
-    public synchronized void removeBaseCastConsumer(IBaseCastConsumer listener) {
+    public void removeBaseCastConsumer(IBaseCastConsumer listener) {
         if (null != listener) {
-            if (mBaseCastConsumers.remove(listener)) {
-                LOGD(TAG, "Successfully removed the existing BaseCastConsumer listener " +
-                        listener);
+            synchronized (mBaseCastConsumers) {
+                if (mBaseCastConsumers.remove(listener)) {
+                    LOGD(TAG, "Successfully removed the existing BaseCastConsumer listener " +
+                            listener);
+                }
             }
         }
     }
@@ -1025,7 +1076,7 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
      * A simple method that throws an exception of there is no connectivity to the cast device.
      *
      * @throws TransientNetworkDisconnectionException If framework is still trying to recover
-     * @throws NoConnectionException If no connectivity to the device exists
+     * @throws NoConnectionException                  If no connectivity to the device exists
      */
     public void checkConnectivity() throws TransientNetworkDisconnectionException,
             NoConnectionException {
@@ -1041,11 +1092,15 @@ public abstract class BaseCastManager implements DeviceSelectionListener, Connec
     @Override
     public void onFailed(int resourceId, int statusCode) {
         LOGD(TAG, "onFailed() was called with statusCode: " + statusCode);
-        for (IBaseCastConsumer consumer : mBaseCastConsumers) {
-            try {
-                consumer.onFailed(resourceId, statusCode);
-            } catch (Exception e) {
-                LOGE(TAG, "onFailed(): Failed to inform " + consumer, e);
+        if (null != mBaseCastConsumers) {
+            synchronized (mBaseCastConsumers) {
+                for (IBaseCastConsumer consumer : mBaseCastConsumers) {
+                    try {
+                        consumer.onFailed(resourceId, statusCode);
+                    } catch (Exception e) {
+                        LOGE(TAG, "onFailed(): Failed to inform " + consumer, e);
+                    }
+                }
             }
         }
 

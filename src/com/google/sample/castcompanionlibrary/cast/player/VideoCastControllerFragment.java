@@ -263,11 +263,11 @@ public class VideoCastControllerFragment extends Fragment implements OnVideoCast
                         return;
                     }
                     try {
-                        double duration = mCastManager.getMediaDuration();
+                        int duration = (int) mCastManager.getMediaDuration();
                         if (duration > 0) {
                             try {
                                 currentPos = (int) mCastManager.getCurrentMediaPosition();
-                                mCastController.updateSeekbar(currentPos, (int) duration);
+                                mCastController.updateSeekbar(currentPos, duration);
                             } catch (Exception e) {
                                 LOGE(TAG, "Failed to get current media position", e);
                             }
@@ -351,9 +351,7 @@ public class VideoCastControllerFragment extends Fragment implements OnVideoCast
         } else {
             imageUrl = Utils.getImageUrl(mSelectedMedia, 1);
         }
-        if (null != imageUrl) {
-            showImage(imageUrl);
-        }
+        showImage(imageUrl);
         if (null == mSelectedMedia) {
             return;
         }
@@ -485,6 +483,11 @@ public class VideoCastControllerFragment extends Fragment implements OnVideoCast
     private void showImage(final String url) {
         if (null != mImageAsyncTask) {
             mImageAsyncTask.cancel(true);
+        }
+        if (null == url) {
+            mCastController.setImage(BitmapFactory.decodeResource(getActivity().getResources(),
+                    R.drawable.dummy_album_art_large));
+            return;
         }
         if (null != mUrlAndBitmap && mUrlAndBitmap.isMatch(url)) {
             // we can reuse mBitmap
@@ -650,7 +653,7 @@ public class VideoCastControllerFragment extends Fragment implements OnVideoCast
     // ------- Implementation of IMediaAuthListener interface --------------------------- //
     @Override
     public void onResult(MediaAuthStatus status, final MediaInfo info, final String message,
-            final JSONObject customData) {
+            final int startPoint, final JSONObject customData) {
         if (status == MediaAuthStatus.RESULT_AUTHORIZED && mAuthSuccess) {
             // successful authorization
             mMediaAuthService = null;
@@ -663,7 +666,7 @@ public class VideoCastControllerFragment extends Fragment implements OnVideoCast
                 @Override
                 public void run() {
                     mOverallState = OverallState.PLAYBACK;
-                    onReady(info, true, 0, customData);
+                    onReady(info, true, startPoint, customData);
                 }
             });
         } else {
@@ -739,6 +742,8 @@ public class VideoCastControllerFragment extends Fragment implements OnVideoCast
         if (!sDialogCanceled && null != mMediaAuthService) {
             mMediaAuthService.abort(MediaAuthStatus.ABORT_USER_CANCELLED);
         }
+
+        mCastManager.clearContext(getActivity());
     }
 
 }

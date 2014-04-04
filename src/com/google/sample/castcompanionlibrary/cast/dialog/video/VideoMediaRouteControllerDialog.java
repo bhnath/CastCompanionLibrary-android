@@ -130,11 +130,11 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
         int visibility = hide ? View.GONE : View.VISIBLE;
         mIcon.setVisibility(visibility);
         mIconContainer.setVisibility(visibility);
-        mPausePlay.setVisibility(visibility);
         mTitle.setVisibility(visibility);
         mSubTitle.setVisibility(visibility);
         mEmptyText.setText(resId == 0 ? R.string.no_media_info : resId);
         mEmptyText.setVisibility(hide ? View.VISIBLE : View.GONE);
+        if (hide) mPausePlay.setVisibility(visibility);
     }
 
     private void updateMetadata() {
@@ -156,7 +156,7 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
         MediaMetadata mm = info.getMetadata();
         mTitle.setText(mm.getString(MediaMetadata.KEY_TITLE));
         mSubTitle.setText(mm.getString(MediaMetadata.KEY_SUBTITLE));
-        setIcon(mm.getImages().get(0).getUrl());
+        setIcon(mm.hasImages() ? mm.getImages().get(0).getUrl() : null);
     }
 
     public void setIcon(Uri uri) {
@@ -164,6 +164,12 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
             return;
         }
         mIconUri = uri;
+        if (null == uri) {
+            Bitmap bm = BitmapFactory.decodeResource(
+                    mContext.getResources(), R.drawable.video_placeholder_200x200);
+            mIcon.setImageBitmap(bm);
+            return;
+        }
         new Thread(new Runnable() {
             Bitmap bm = null;
 
@@ -197,14 +203,12 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
         if (null != mPausePlay) {
             switch (state) {
                 case MediaStatus.PLAYER_STATE_PLAYING:
-                    mPausePlay.setVisibility(View.VISIBLE);
                     mPausePlay.setImageDrawable(getPauseStopButton());
-                    setLoadingVisibility(false);
+                    adjustControlsVisibility(true);
                     break;
                 case MediaStatus.PLAYER_STATE_PAUSED:
-                    mPausePlay.setVisibility(View.VISIBLE);
                     mPausePlay.setImageDrawable(mPlayDrawable);
-                    setLoadingVisibility(false);
+                    adjustControlsVisibility(true);
                     break;
                 case MediaStatus.PLAYER_STATE_IDLE:
                     mPausePlay.setVisibility(View.INVISIBLE);
@@ -222,9 +226,8 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
                             case MediaInfo.STREAM_TYPE_LIVE:
                                 int idleReason = mCastManager.getIdleReason();
                                 if (idleReason == MediaStatus.IDLE_REASON_CANCELED) {
-                                    mPausePlay.setVisibility(View.VISIBLE);
                                     mPausePlay.setImageDrawable(mPlayDrawable);
-                                    setLoadingVisibility(false);
+                                    adjustControlsVisibility(true);
                                 } else {
                                     mPausePlay.setVisibility(View.INVISIBLE);
                                     setLoadingVisibility(false);
@@ -234,8 +237,7 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
                     }
                     break;
                 case MediaStatus.PLAYER_STATE_BUFFERING:
-                    mPausePlay.setVisibility(View.INVISIBLE);
-                    setLoadingVisibility(true);
+                    adjustControlsVisibility(false);
                     break;
                 default:
                     mPausePlay.setVisibility(View.INVISIBLE);
@@ -257,6 +259,12 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
 
     private void setLoadingVisibility(boolean show) {
         mLoading.setVisibility(show ? View.VISIBLE : View.GONE);
+    }
+
+    private void adjustControlsVisibility(boolean showPlayPlause) {
+        int visible = showPlayPlause ? View.VISIBLE : View.INVISIBLE;
+        mPausePlay.setVisibility(visible);
+        setLoadingVisibility(!showPlayPlause);
     }
 
     @Override
@@ -295,16 +303,16 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
                     return;
                 }
                 try {
+                    adjustControlsVisibility(false);
                     mCastManager.togglePlayback();
-                    setLoadingVisibility(true);
                 } catch (CastException e) {
-                    setLoadingVisibility(false);
+                    adjustControlsVisibility(true);
                     LOGE(TAG, "Failed to toggle playback", e);
                 } catch (TransientNetworkDisconnectionException e) {
-                    setLoadingVisibility(false);
+                    adjustControlsVisibility(true);
                     LOGE(TAG, "Failed to toggle playback due to network issues", e);
                 } catch (NoConnectionException e) {
-                    setLoadingVisibility(false);
+                    adjustControlsVisibility(true);
                     LOGE(TAG, "Failed to toggle playback due to network issues", e);
                 }
             }

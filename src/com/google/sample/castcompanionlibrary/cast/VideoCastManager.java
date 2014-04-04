@@ -78,13 +78,15 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 /**
  * A concrete subclass of {@link BaseCastManager} that is suitable for casting video contents (it
- * also provides a single custom data channel/namespace if an out-of-bound communication is needed).
+ * also provides a single custom data channel/namespace if an out-of-bound communication is
+ * needed).
  * <p>
  * This is a singleton that needs to be "initialized" (by calling <code>initialize()</code>) prior
  * to usage. Subsequent to initialization, an easier way to get access to the singleton class is to
@@ -101,12 +103,12 @@ import java.util.Set;
  * corresponding widget to their layout xml and then calling <code>addMiniController()</code>. This
  * class manages various states of the remote cast device.Client applications, however, can
  * complement the default behavior of this class by hooking into various callbacks that it provides
- * (see {@link IVideoCastConsumer}). Since the number of these callbacks is usually much larger than
- * what a single application might be interested in, there is a no-op implementation of this
+ * (see {@link IVideoCastConsumer}). Since the number of these callbacks is usually much larger
+ * than what a single application might be interested in, there is a no-op implementation of this
  * interface (see {@link VideoCastConsumerImpl}) that applications can subclass to override only
- * those methods that they are interested in. Since this library depends on the cast functionalities
- * provided by the Google Play services, the library checks to ensure that the right version of that
- * service is installed. It also provides a simple static method
+ * those methods that they are interested in. Since this library depends on the cast
+ * functionalities provided by the Google Play services, the library checks to ensure that the
+ * right version of that service is installed. It also provides a simple static method
  * <code>checkGooglePlaySevices()</code> that clients can call at an early stage of their
  * applications to provide a dialog for users if they need to update/activate their GMS library. To
  * learn more about this library, please read the documentation that is distributed as part of this
@@ -122,8 +124,8 @@ public class VideoCastManager extends BaseCastManager
     public static final String EXTRA_CUSTOM_DATA = "customData";
 
     /**
-     * Volume can be controlled at two different layers, one is at the "stream" level and one at the
-     * "device" level. <code>VolumeType</code> encapsulates these two types.
+     * Volume can be controlled at two different layers, one is at the "stream" level and one at
+     * the "device" level. <code>VolumeType</code> encapsulates these two types.
      */
     public static enum VolumeType {
         STREAM,
@@ -144,7 +146,7 @@ public class VideoCastManager extends BaseCastManager
     private final ComponentName mMediaButtonReceiverComponent;
     private final String mDataNamespace;
     private Cast.MessageReceivedCallback mDataChannel;
-    protected Set<IVideoCastConsumer> mVideoConsumers;
+    private Set<IVideoCastConsumer> mVideoConsumers;
     private IMediaAuthService mAuthService;
 
     /**
@@ -154,15 +156,15 @@ public class VideoCastManager extends BaseCastManager
      * Failing to initialize this class before requesting an instance will result in a
      * {@link CastException} exception.
      *
-     * @see getInstance()
      * @param context
      * @param applicationId the unique ID for your application
      * @param targetActivity this points to the activity that should be invoked when user clicks on
-     *            the icon in the {@link MiniController}. Often this is the activity that hosts the
-     *            local player.
-     * @param dataNamespace if not <code>null</code>, a custom data channel with this namespace will
-     *            be created.
+     * the icon in the {@link MiniController}. Often this is the activity that hosts the local
+     * player.
+     * @param dataNamespace if not <code>null</code>, a custom data channel with this namespace
+     * will be created.
      * @return
+     * @see getInstance()
      */
     public static synchronized VideoCastManager initialize(Context context,
             String applicationId, Class<?> targetActivity, String dataNamespace) {
@@ -183,9 +185,9 @@ public class VideoCastManager extends BaseCastManager
      * Returns the initialized instances of this class. If it is not initialized yet, a
      * {@link CastException} will be thrown.
      *
-     * @see initialze()
      * @return
      * @throws CastException
+     * @see initialze()
      */
     public static VideoCastManager getInstance() throws CastException {
         if (null == sInstance) {
@@ -197,16 +199,16 @@ public class VideoCastManager extends BaseCastManager
 
     /**
      * Returns the initialized instances of this class. If it is not initialized yet, a
-     * {@link CastException} will be thrown. The {@link Context} that is passed as the argument will
-     * be used to update the context for the <code>VideoCastManager
-     * </code> instance. The main purpose of updating context is to enable the library to provide
-     * {@link Context} related functionalities, e.g. it can create an error dialog if needed. This
-     * method is preferred over the similar one without a context argument.
+     * {@link CastException} will be thrown. The {@link Context} that is passed as the argument
+     * will be used to update the context for the <code>VideoCastManager</code> instance. The main
+     * purpose of updating context is to enable the library to provide {@link Context} related
+     * functionalities, e.g. it can create an error dialog if needed. This method is preferred over
+     * the similar one without a context argument.
      *
-     * @see {@link initialize()}, {@link setContext()}
      * @param context the current Context
      * @return
      * @throws CastException
+     * @see {@link initialize()}, {@link setContext()}
      */
     public static VideoCastManager getInstance(Context context) throws CastException {
         if (null == sInstance) {
@@ -222,7 +224,7 @@ public class VideoCastManager extends BaseCastManager
             String dataNamespace) {
         super(context, applicationId);
         LOGD(TAG, "VideoCastManager is instantiated");
-        mVideoConsumers = new HashSet<IVideoCastConsumer>();
+        mVideoConsumers = Collections.synchronizedSet(new HashSet<IVideoCastConsumer>());
         mDataNamespace = dataNamespace;
         if (null == targetActivity) {
             targetActivity = VideoCastControllerActivity.class;
@@ -231,15 +233,15 @@ public class VideoCastManager extends BaseCastManager
         Utils.saveStringToPreference(mContext, PREFS_KEY_CAST_ACTIVITY_NAME,
                 mTargetActivity.getName());
 
-        mMiniControllers = new HashSet<IMiniController>();
+        mMiniControllers = Collections.synchronizedSet(new HashSet<IMiniController>());
 
         mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
         mMediaButtonReceiverComponent = new ComponentName(context, VideoIntentReceiver.class);
     }
 
-    /*************************************************************************/
-    /************** MiniControllers management *******************************/
-    /*************************************************************************/
+    /*============================================================================================*/
+    /*========== MiniControllers managemen =======================================================*/
+    /*============================================================================================*/
 
     /**
      * Updates the information and state of a MiniController.
@@ -259,7 +261,9 @@ public class VideoCastManager extends BaseCastManager
             controller.setSubTitle(mContext.getResources().getString(R.string.casting_to_device,
                     mDeviceName));
             controller.setTitle(mm.getString(MediaMetadata.KEY_TITLE));
-            controller.setIcon(mm.getImages().get(0).getUrl());
+            if (!mm.getImages().isEmpty()) {
+                controller.setIcon(mm.getImages().get(0).getUrl());
+            }
         }
     }
 
@@ -268,10 +272,12 @@ public class VideoCastManager extends BaseCastManager
      */
     private void updateMiniControllers() {
         if (null != mMiniControllers && !mMiniControllers.isEmpty()) {
-            for (final IMiniController controller : mMiniControllers) {
-                try {
-                    updateMiniController(controller);
-                } catch (Exception e) {/* silent failure */
+            synchronized (mMiniControllers) {
+                for (final IMiniController controller : mMiniControllers) {
+                    try {
+                        updateMiniController(controller);
+                    } catch (Exception e) {/* silent failure */
+                    }
                 }
             }
         }
@@ -322,15 +328,17 @@ public class VideoCastManager extends BaseCastManager
     public void updateMiniControllersVisibility(boolean visible) {
         LOGD(TAG, "updateMiniControllersVisibility() reached with visibility: " + visible);
         if (null != mMiniControllers) {
-            for (IMiniController controller : mMiniControllers) {
-                controller.setVisibility(visible ? View.VISIBLE : View.GONE);
+            synchronized (mMiniControllers) {
+                for (IMiniController controller : mMiniControllers) {
+                    controller.setVisibility(visible ? View.VISIBLE : View.GONE);
+                }
             }
         }
     }
 
-    /*************************************************************************/
-    /************** VideoCastControllerActivity management *******************/
-    /*************************************************************************/
+    /*============================================================================================*/
+    /*========== VideoCastControllerActivity management ==========================================*/
+    /*============================================================================================*/
 
     /**
      * Launches the VideoCastControllerActivity that provides a default Cast Player page.
@@ -338,7 +346,8 @@ public class VideoCastManager extends BaseCastManager
      * @param context
      * @param mediaWrapper a bundle wrapper for the media that is or will be casted
      * @param position (in milliseconds) is the starting point of the media playback
-     * @param shouldStart indicates if the remote playback should start after launching the new page
+     * @param shouldStart indicates if the remote playback should start after launching the new
+     * page
      * @param customData Optional {@link JSONObject}
      */
     public void startCastControllerActivity(Context context, Bundle mediaWrapper, int position,
@@ -359,7 +368,8 @@ public class VideoCastManager extends BaseCastManager
      * @param context
      * @param mediaWrapper a bundle wrapper for the media that is or will be casted
      * @param position (in milliseconds) is the starting point of the media playback
-     * @param shouldStart indicates if the remote playback should start after launching the new page
+     * @param shouldStart indicates if the remote playback should start after launching the new
+     * page
      */
     public void startCastControllerActivity(Context context, Bundle mediaWrapper, int position,
             boolean shouldStart) {
@@ -392,7 +402,8 @@ public class VideoCastManager extends BaseCastManager
      * @param ctx
      * @param mediaInfo pointing to the media that is or will be casted
      * @param position (in milliseconds) is the starting point of the media playback
-     * @param shouldStart indicates if the remote playback should start after launching the new page
+     * @param shouldStart indicates if the remote playback should start after launching the new
+     * page
      */
     public void startCastControllerActivity(Context ctx,
             MediaInfo mediaInfo, int position, boolean shouldStart) {
@@ -415,9 +426,9 @@ public class VideoCastManager extends BaseCastManager
         mAuthService = null;
     }
 
-    /*************************************************************************/
-    /************** Utility Methods ******************************************/
-    /*************************************************************************/
+    /*============================================================================================*/
+    /*========== Utility Methods =================================================================*/
+    /*============================================================================================*/
 
     /**
      * Returns the active {@link RemoteMediaPlayer} instance. Since there are a number of media
@@ -506,8 +517,8 @@ public class VideoCastManager extends BaseCastManager
      *
      * @return
      * @throws NoConnectionException If no connectivity to the device exists
-     * @throws TransientNetworkDisconnectionException If framework is still trying to recover from a
-     *             possibly transient loss of network
+     * @throws TransientNetworkDisconnectionException If framework is still trying to recover from
+     * a possibly transient loss of network
      */
     public String getRemoteMovieUrl() throws TransientNetworkDisconnectionException,
             NoConnectionException {
@@ -567,8 +578,8 @@ public class VideoCastManager extends BaseCastManager
      *
      * @return
      * @throws NoConnectionException If no connectivity to the device exists
-     * @throws TransientNetworkDisconnectionException If framework is still trying to recover from a
-     *             possibly transient loss of network
+     * @throws TransientNetworkDisconnectionException If framework is still trying to recover from
+     * a possibly transient loss of network
      */
     public MediaInfo getRemoteMediaInformation() throws TransientNetworkDisconnectionException,
             NoConnectionException {
@@ -582,8 +593,8 @@ public class VideoCastManager extends BaseCastManager
      * this returns -1. It internally detects what type of volume is used.
      *
      * @throws NoConnectionException If no connectivity to the device exists
-     * @throws TransientNetworkDisconnectionException If framework is still trying to recover from a
-     *             possibly transient loss of network
+     * @throws TransientNetworkDisconnectionException If framework is still trying to recover from
+     * a possibly transient loss of network
      */
     public double getVolume() throws TransientNetworkDisconnectionException, NoConnectionException {
         checkConnectivity();
@@ -644,8 +655,8 @@ public class VideoCastManager extends BaseCastManager
      *
      * @param delta
      * @throws NoConnectionException If no connectivity to the device exists
-     * @throws TransientNetworkDisconnectionException If framework is still trying to recover from a
-     *             possibly transient loss of network
+     * @throws TransientNetworkDisconnectionException If framework is still trying to recover from
+     * a possibly transient loss of network
      * @throws CastException
      */
     public void incrementVolume(double delta) throws CastException,
@@ -718,14 +729,13 @@ public class VideoCastManager extends BaseCastManager
     }
 
     /**
-     * Returns the duration of the media that is loaded, in seconds. If there is no connection or if
-     * there is no channel established, this method returns -1.
+     * Returns the duration of the media that is loaded, in milliseconds.
      *
      * @return
      * @throws NoConnectionException
      * @throws TransientNetworkDisconnectionException
      */
-    public double getMediaDuration() throws TransientNetworkDisconnectionException,
+    public long getMediaDuration() throws TransientNetworkDisconnectionException,
             NoConnectionException {
         checkConnectivity();
         checkRemoteMediaPlayerAvailable();
@@ -733,14 +743,13 @@ public class VideoCastManager extends BaseCastManager
     }
 
     /**
-     * Returns the current (approximate) position of the current media, in seconds. If there is no
-     * channel established, this method returns -1.
+     * Returns the current (approximate) position of the current media, in milliseconds.
      *
      * @return
      * @throws NoConnectionException
      * @throws TransientNetworkDisconnectionException
      */
-    public double getCurrentMediaPosition() throws TransientNetworkDisconnectionException,
+    public long getCurrentMediaPosition() throws TransientNetworkDisconnectionException,
             NoConnectionException {
         checkConnectivity();
         checkRemoteMediaPlayerAvailable();
@@ -761,18 +770,18 @@ public class VideoCastManager extends BaseCastManager
      */
     @Override
     protected void onUiVisibilityChanged(boolean visible) {
-        super.onUiVisibilityChanged(visible);
         if (isFeatureEnabled(FEATURE_NOTIFICATION)) {
             Intent intent = new Intent(VideoCastNotificationService.ACTION_VISIBILITY);
             intent.setPackage(mContext.getPackageName());
             intent.putExtra("visible", !visible);
             mContext.startService(intent);
         }
+        super.onUiVisibilityChanged(visible);
     }
 
-    /************************************************************/
-    /***** Notification Service *********************************/
-    /************************************************************/
+    /*============================================================================================*/
+    /*========== Notification Service ============================================================*/
+    /*============================================================================================*/
 
     /*
      * Starts a service that can last beyond the lifetime of the application to provide
@@ -794,12 +803,14 @@ public class VideoCastManager extends BaseCastManager
         if (!isFeatureEnabled(FEATURE_NOTIFICATION)) {
             return;
         }
-        mContext.stopService(new Intent(mContext, VideoCastNotificationService.class));
+        if (null != mContext) {
+            mContext.stopService(new Intent(mContext, VideoCastNotificationService.class));
+        }
     }
 
-    /************************************************************/
-    /*********** Implementing Cast.Listener *********************/
-    /************************************************************/
+    /*============================================================================================*/
+    /*========== Implementing Cast.Listener ======================================================*/
+    /*============================================================================================*/
 
     private void onApplicationDisconnected(int errorCode) {
         LOGD(TAG, "onApplicationDisconnected() reached with error code: " + errorCode);
@@ -807,11 +818,13 @@ public class VideoCastManager extends BaseCastManager
         if (null != mRemoteControlClientCompat && isFeatureEnabled(FEATURE_LOCKSCREEN)) {
             mRemoteControlClientCompat.removeFromMediaRouter(mMediaRouter);
         }
-        for (IVideoCastConsumer consumer : mVideoConsumers) {
-            try {
-                consumer.onApplicationDisconnected(errorCode);
-            } catch (Exception e) {
-                LOGE(TAG, "onApplicationDisconnected(): Failed to inform " + consumer, e);
+        synchronized (mVideoConsumers) {
+            for (IVideoCastConsumer consumer : mVideoConsumers) {
+                try {
+                    consumer.onApplicationDisconnected(errorCode);
+                } catch (Exception e) {
+                    LOGE(TAG, "onApplicationDisconnected(): Failed to inform " + consumer, e);
+                }
             }
         }
         if (null != mMediaRouter) {
@@ -831,12 +844,13 @@ public class VideoCastManager extends BaseCastManager
             appStatus = Cast.CastApi.getApplicationStatus(mApiClient);
             LOGD(TAG, "onApplicationStatusChanged() reached: "
                     + Cast.CastApi.getApplicationStatus(mApiClient));
-
-            for (IVideoCastConsumer consumer : mVideoConsumers) {
-                try {
-                    consumer.onApplicationStatusChanged(appStatus);
-                } catch (Exception e) {
-                    LOGE(TAG, "onApplicationStatusChanged(): Failed to inform " + consumer, e);
+            synchronized (mVideoConsumers) {
+                for (IVideoCastConsumer consumer : mVideoConsumers) {
+                    try {
+                        consumer.onApplicationStatusChanged(appStatus);
+                    } catch (Exception e) {
+                        LOGE(TAG, "onApplicationStatusChanged(): Failed to inform " + consumer, e);
+                    }
                 }
             }
         } catch (IllegalStateException e1) {
@@ -850,11 +864,13 @@ public class VideoCastManager extends BaseCastManager
         try {
             volume = getVolume();
             boolean isMute = isMute();
-            for (IVideoCastConsumer consumer : mVideoConsumers) {
-                try {
-                    consumer.onVolumeChanged(volume, isMute);
-                } catch (Exception e) {
-                    LOGE(TAG, "onVolumeChanged(): Failed to inform " + consumer, e);
+            synchronized (mVideoConsumers) {
+                for (IVideoCastConsumer consumer : mVideoConsumers) {
+                    try {
+                        consumer.onVolumeChanged(volume, isMute);
+                    } catch (Exception e) {
+                        LOGE(TAG, "onVolumeChanged(): Failed to inform " + consumer, e);
+                    }
                 }
             }
         } catch (Exception e1) {
@@ -890,8 +906,9 @@ public class VideoCastManager extends BaseCastManager
         try {
             attachDataChannel();
             attachMediaChannel();
+            mSessionId = sessionId;
             // saving device for future retrieval; we only save the last session info
-            Utils.saveStringToPreference(mContext, PREFS_KEY_SESSION_ID, sessionId);
+            Utils.saveStringToPreference(mContext, PREFS_KEY_SESSION_ID, mSessionId);
             mRemoteMediaPlayer.requestStatus(mApiClient).
                     setResultCallback(new ResultCallback<RemoteMediaPlayer.MediaChannelResult>() {
 
@@ -904,11 +921,13 @@ public class VideoCastManager extends BaseCastManager
 
                         }
                     });
-            for (IVideoCastConsumer consumer : mVideoConsumers) {
-                try {
-                    consumer.onApplicationConnected(appMetadata, sessionId, wasLaunched);
-                } catch (Exception e) {
-                    LOGE(TAG, "onApplicationConnected(): Failed to inform " + consumer, e);
+            synchronized (mVideoConsumers) {
+                for (IVideoCastConsumer consumer : mVideoConsumers) {
+                    try {
+                        consumer.onApplicationConnected(appMetadata, mSessionId, wasLaunched);
+                    } catch (Exception e) {
+                        LOGE(TAG, "onApplicationConnected(): Failed to inform " + consumer, e);
+                    }
                 }
             }
         } catch (TransientNetworkDisconnectionException e) {
@@ -928,6 +947,7 @@ public class VideoCastManager extends BaseCastManager
     @Override
     public void onConnectivityRecovered() {
         reattachMediaChannel();
+        reattachDataChannel();
         super.onConnectivityRecovered();
     }
 
@@ -937,11 +957,13 @@ public class VideoCastManager extends BaseCastManager
      */
     @Override
     public void onApplicationStopFailed(int errorCode) {
-        for (IVideoCastConsumer consumer : mVideoConsumers) {
-            try {
-                consumer.onApplicationStopFailed(errorCode);
-            } catch (Exception e) {
-                LOGE(TAG, "onApplicationLaunched(): Failed to inform " + consumer, e);
+        synchronized (mVideoConsumers) {
+            for (IVideoCastConsumer consumer : mVideoConsumers) {
+                try {
+                    consumer.onApplicationStopFailed(errorCode);
+                } catch (Exception e) {
+                    LOGE(TAG, "onApplicationLaunched(): Failed to inform " + consumer, e);
+                }
             }
         }
     }
@@ -960,11 +982,13 @@ public class VideoCastManager extends BaseCastManager
             return;
         } else {
             boolean showError = false;
-            for (IVideoCastConsumer consumer : mVideoConsumers) {
-                try {
-                    showError = showError || consumer.onApplicationConnectionFailed(errorCode);
-                } catch (Exception e) {
-                    LOGE(TAG, "onApplicationLaunchFailed(): Failed to inform " + consumer, e);
+            synchronized (mVideoConsumers) {
+                for (IVideoCastConsumer consumer : mVideoConsumers) {
+                    try {
+                        showError = showError || consumer.onApplicationConnectionFailed(errorCode);
+                    } catch (Exception e) {
+                        LOGE(TAG, "onApplicationLaunchFailed(): Failed to inform " + consumer, e);
+                    }
                 }
             }
             if (showError) {
@@ -993,9 +1017,9 @@ public class VideoCastManager extends BaseCastManager
         }
     }
 
-    /*************************************************************************/
-    /************** Playback methods *****************************************/
-    /*************************************************************************/
+    /*============================================================================================*/
+    /*========== Playback methods ================================================================*/
+    /*============================================================================================*/
 
     /**
      * Loads a media. For this to succeed, you need to have successfully launched the application.
@@ -1003,7 +1027,7 @@ public class VideoCastManager extends BaseCastManager
      * @param media
      * @param autoPlay If <code>true</code>, playback starts after load
      * @param position Where to start the playback (only used if autoPlay is <code>true</code>.
-     *            Units is milliseconds.
+     * Units is milliseconds.
      * @throws NoConnectionException
      * @throws TransientNetworkDisconnectionException
      */
@@ -1017,8 +1041,8 @@ public class VideoCastManager extends BaseCastManager
      *
      * @param media
      * @param autoPlay If <code>true</code>, playback starts after load
-     * @param position Where to start the playback (only used if autoPlay is <code>true</code>.
-     *            Units is milliseconds.
+     * @param position Where to start the playback (only used if autoPlay is <code>true</code>).
+     * Units is milliseconds.
      * @param customData Optional {@link JSONObject} data to be passed to the cast device
      * @throws NoConnectionException
      * @throws TransientNetworkDisconnectionException
@@ -1070,24 +1094,28 @@ public class VideoCastManager extends BaseCastManager
      * Resumes the playback from where it was left (can be the beginning).
      *
      * @param customData Optional {@link JSONObject} data to be passed to the cast device
-     * @throws CastException
      * @throws NoConnectionException
      * @throws TransientNetworkDisconnectionException
      */
-    public void play(JSONObject customData) throws CastException,
+    public void play(JSONObject customData) throws
             TransientNetworkDisconnectionException, NoConnectionException {
         LOGD(TAG, "play()");
         checkConnectivity();
-        try {
-            if (mRemoteMediaPlayer == null) {
-                LOGE(TAG, "Trying to play a video with no active media session");
-                throw new NoConnectionException();
-            }
-            mRemoteMediaPlayer.play(mApiClient);
-        } catch (IOException e) {
-            LOGE(TAG, "Failed to play media", e);
-            throw new CastException(mContext.getString(R.string.failed_to_play), e);
+        if (mRemoteMediaPlayer == null) {
+            LOGE(TAG, "Trying to play a video with no active media session");
+            throw new NoConnectionException();
         }
+        mRemoteMediaPlayer.play(mApiClient)
+                .setResultCallback(new ResultCallback<MediaChannelResult>() {
+
+                    @Override
+                    public void onResult(MediaChannelResult result) {
+                        if (!result.getStatus().isSuccess()) {
+                            onFailed(R.string.failed_to_play, result.getStatus().getStatusCode());
+                        }
+                    }
+
+                });
     }
 
     /**
@@ -1106,24 +1134,28 @@ public class VideoCastManager extends BaseCastManager
      * Stops the playback of media/stream
      *
      * @param customData Optional {@link JSONObject}
-     * @throws CastException
      * @throws TransientNetworkDisconnectionException
      * @throws NoConnectionException
      */
-    public void stop(JSONObject customData) throws CastException,
+    public void stop(JSONObject customData) throws
             TransientNetworkDisconnectionException, NoConnectionException {
         LOGD(TAG, "stop()");
         checkConnectivity();
-        try {
-            if (mRemoteMediaPlayer == null) {
-                LOGE(TAG, "Trying to stop a stream with no active media session");
-                throw new NoConnectionException();
-            }
-            mRemoteMediaPlayer.stop(mApiClient, customData);
-        } catch (IOException e) {
-            LOGE(TAG, "Failed to stop media", e);
-            throw new CastException(mContext.getString(R.string.failed_to_stop), e);
+        if (mRemoteMediaPlayer == null) {
+            LOGE(TAG, "Trying to stop a stream with no active media session");
+            throw new NoConnectionException();
         }
+        mRemoteMediaPlayer.stop(mApiClient, customData).setResultCallback(
+                new ResultCallback<MediaChannelResult>() {
+
+                    @Override
+                    public void onResult(MediaChannelResult result) {
+                        if (!result.getStatus().isSuccess()) {
+                            onFailed(R.string.failed_to_stop, result.getStatus().getStatusCode());
+                        }
+                    }
+
+                });
     }
 
     /**
@@ -1154,11 +1186,10 @@ public class VideoCastManager extends BaseCastManager
      * Pauses the playback.
      *
      * @param customData Optional {@link JSONObject} data to be passed to the cast device
-     * @throws CastException
      * @throws NoConnectionException
      * @throws TransientNetworkDisconnectionException
      */
-    public void pause(JSONObject customData) throws CastException,
+    public void pause(JSONObject customData) throws
             TransientNetworkDisconnectionException, NoConnectionException {
         LOGD(TAG, "attempting to pause media");
         checkConnectivity();
@@ -1166,12 +1197,17 @@ public class VideoCastManager extends BaseCastManager
             LOGE(TAG, "Trying to pause a video with no active media session");
             throw new NoConnectionException();
         }
-        try {
-            mRemoteMediaPlayer.pause(mApiClient, customData);
-        } catch (IOException e) {
-            LOGE(TAG, "Failed to pause media", e);
-            throw new CastException(mContext, R.string.failed_to_pause, e);
-        }
+        mRemoteMediaPlayer.pause(mApiClient, customData)
+                .setResultCallback(new ResultCallback<MediaChannelResult>() {
+
+                    @Override
+                    public void onResult(MediaChannelResult result) {
+                        if (!result.getStatus().isSuccess()) {
+                            onFailed(R.string.failed_to_pause, result.getStatus().getStatusCode());
+                        }
+                    }
+
+                });
     }
 
     /**
@@ -1181,7 +1217,6 @@ public class VideoCastManager extends BaseCastManager
      * @param position in milliseconds
      * @throws NoConnectionException
      * @throws TransientNetworkDisconnectionException
-     * @throws CastException
      */
     public void seek(int position) throws TransientNetworkDisconnectionException,
             NoConnectionException {
@@ -1286,7 +1321,7 @@ public class VideoCastManager extends BaseCastManager
                             VideoCastManager.this.onRemoteMediaPlayerMetadataUpdated();
                         }
                     }
-                    );
+            );
 
         }
         try {
@@ -1319,7 +1354,7 @@ public class VideoCastManager extends BaseCastManager
                 try {
                     Cast.CastApi.removeMessageReceivedCallbacks(mApiClient,
                             mRemoteMediaPlayer.getNamespace());
-                } catch (IOException e) {
+                } catch (Exception e) {
                     LOGE(TAG, "Failed to detach media channel", e);
                 }
             }
@@ -1331,13 +1366,13 @@ public class VideoCastManager extends BaseCastManager
      * Returns the playback status of the remote device.
      *
      * @return Returns one of the values
-     *         <ul>
-     *         <li> <code>MediaStatus.PLAYER_STATE_PLAYING</code>
-     *         <li> <code>MediaStatus.PLAYER_STATE_PAUSED</code>
-     *         <li> <code>MediaStatus.PLAYER_STATE_BUFFERING</code>
-     *         <li> <code>MediaStatus.PLAYER_STATE_IDLE</code>
-     *         <li> <code>MediaStatus.PLAYER_STATE_UNKNOWN</code>
-     *         </ul>
+     * <ul>
+     * <li> <code>MediaStatus.PLAYER_STATE_PLAYING</code>
+     * <li> <code>MediaStatus.PLAYER_STATE_PAUSED</code>
+     * <li> <code>MediaStatus.PLAYER_STATE_BUFFERING</code>
+     * <li> <code>MediaStatus.PLAYER_STATE_IDLE</code>
+     * <li> <code>MediaStatus.PLAYER_STATE_UNKNOWN</code>
+     * </ul>
      */
     public int getPlaybackStatus() {
         return mState;
@@ -1354,9 +1389,9 @@ public class VideoCastManager extends BaseCastManager
         return mIdleReason;
     }
 
-    /*************************************************************************/
-    /************** DataChannel callbacks and methods ************************/
-    /*************************************************************************/
+    /*============================================================================================*/
+    /*========== DataChannel callbacks and methods ===============================================*/
+    /*============================================================================================*/
 
     /*
      * If a data namespace was provided when initializing this class, we set things up for a data
@@ -1377,36 +1412,54 @@ public class VideoCastManager extends BaseCastManager
 
             @Override
             public void onMessageReceived(CastDevice castDevice, String namespace, String message) {
-                for (IVideoCastConsumer consumer : mVideoConsumers) {
-                    try {
-                        consumer.onDataMessageReceived(message);
-                    } catch (Exception e) {
-                        LOGE(TAG, "onMessageReceived(): Failed to inform " + consumer, e);
+                synchronized (mVideoConsumers) {
+                    for (IVideoCastConsumer consumer : mVideoConsumers) {
+                        try {
+                            consumer.onDataMessageReceived(message);
+                        } catch (Exception e) {
+                            LOGE(TAG, "onMessageReceived(): Failed to inform " + consumer, e);
+                        }
                     }
                 }
             }
         };
         try {
             Cast.CastApi.setMessageReceivedCallbacks(mApiClient, mDataNamespace, mDataChannel);
-        } catch (Exception e) {
-            LOGE(TAG, "Failed to add data channel", e);
+        } catch (IOException e) {
+            LOGE(TAG, "Failed to setup data channel", e);
+        } catch (IllegalStateException e) {
+            LOGE(TAG, "Failed to setup data channel", e);
+        }
+    }
+
+    private void reattachDataChannel() {
+        if (!TextUtils.isEmpty(mDataNamespace) && null != mDataChannel && null != mApiClient) {
+            try {
+                Cast.CastApi.setMessageReceivedCallbacks(mApiClient, mDataNamespace, mDataChannel);
+            } catch (IOException e) {
+                LOGE(TAG, "Failed to setup data channel", e);
+            } catch (IllegalStateException e) {
+                LOGE(TAG, "Failed to setup data channel", e);
+            }
         }
     }
 
     private void onMessageSendFailed(int errorCode) {
-        for (IVideoCastConsumer consumer : mVideoConsumers) {
-            try {
-                consumer.onDataMessageSendFailed(errorCode);
-            } catch (Exception e) {
-                LOGE(TAG, "onMessageSendFailed(): Failed to inform " + consumer, e);
+        synchronized (mVideoConsumers) {
+            for (IVideoCastConsumer consumer : mVideoConsumers) {
+                try {
+                    consumer.onDataMessageSendFailed(errorCode);
+                } catch (Exception e) {
+                    LOGE(TAG, "onMessageSendFailed(): Failed to inform " + consumer, e);
+                }
             }
         }
     }
 
     /**
-     * Sends the <code>message</code> on the data channel for the namespace that was provided during
-     * the initialization of this class. If <code>messageId &gt; 0</code>, then it has to be a
-     * unique identifier for the message; this id will be returned if an error occurs. If
+     * Sends the <code>message</code> on the data channel for the namespace that was provided
+     * during the initialization of this class. If <code>messageId &gt; 0</code>, then it has to be
+     * a unique identifier for the message; this id will be returned if an error occurs. If
      * <code>messageId == 0</code>, then an auto-generated unique identifier will be created and
      * returned for the message.
      *
@@ -1414,8 +1467,8 @@ public class VideoCastManager extends BaseCastManager
      * @return
      * @throws IllegalStateException If the namespace is empty or null
      * @throws NoConnectionException If no connectivity to the device exists
-     * @throws TransientNetworkDisconnectionException If framework is still trying to recover from a
-     *             possibly transient loss of network
+     * @throws TransientNetworkDisconnectionException If framework is still trying to recover from
+     * a possibly transient loss of network
      */
     public void sendDataMessage(String message) throws TransientNetworkDisconnectionException,
             NoConnectionException {
@@ -1436,9 +1489,9 @@ public class VideoCastManager extends BaseCastManager
     }
 
     /**
-     * Remove the custom data channel, if any. It returns <code>true</code> if it succeeds otherwise
-     * if it encounters an error or if no connection exists or if no custom data channel exists,
-     * then it returns <code>false</code>
+     * Remove the custom data channel, if any. It returns <code>true</code> if it succeeds
+     * otherwise if it encounters an error or if no connection exists or if no custom data channel
+     * exists, then it returns <code>false</code>
      *
      * @return
      */
@@ -1450,6 +1503,7 @@ public class VideoCastManager extends BaseCastManager
             if (null != Cast.CastApi && null != mApiClient) {
                 Cast.CastApi.removeMessageReceivedCallbacks(mApiClient, mDataNamespace);
             }
+            mDataChannel = null;
             return true;
         } catch (Exception e) {
             LOGE(TAG, "Failed to remove namespace: " + mDataNamespace, e);
@@ -1458,9 +1512,9 @@ public class VideoCastManager extends BaseCastManager
 
     }
 
-    /*************************************************************************/
-    /************** MediaChannel callbacks ***********************************/
-    /*************************************************************************/
+    /*============================================================================================*/
+    /*========== MediaChannel callbacks ==========================================================*/
+    /*============================================================================================*/
 
     /*
      * This is called by onStatusUpdated() of the RemoteMediaPlayer
@@ -1510,13 +1564,15 @@ public class VideoCastManager extends BaseCastManager
             }
             updateMiniControllersVisibility(!makeUiHidden);
             updateMiniControllers();
-            for (IVideoCastConsumer consumer : mVideoConsumers) {
-                try {
-                    consumer.onRemoteMediaPlayerStatusUpdated();
-                    consumer.onVolumeChanged(volume, isMute);
-                } catch (Exception e) {
-                    LOGE(TAG, "onRemoteMediaplayerStatusUpdated(): Failed to inform "
-                            + consumer, e);
+            synchronized (mVideoConsumers) {
+                for (IVideoCastConsumer consumer : mVideoConsumers) {
+                    try {
+                        consumer.onRemoteMediaPlayerStatusUpdated();
+                        consumer.onVolumeChanged(volume, isMute);
+                    } catch (Exception e) {
+                        LOGE(TAG, "onRemoteMediaplayerStatusUpdated(): Failed to inform "
+                                + consumer, e);
+                    }
                 }
             }
         } catch (TransientNetworkDisconnectionException e) {
@@ -1533,11 +1589,14 @@ public class VideoCastManager extends BaseCastManager
     public void onRemoteMediaPlayerMetadataUpdated() {
         LOGD(TAG, "onRemoteMediaPlayerMetadataUpdated() reached");
         updateLockScreenMetadata();
-        for (IVideoCastConsumer consumer : mVideoConsumers) {
-            try {
-                consumer.onRemoteMediaPlayerMetadataUpdated();
-            } catch (Exception e) {
-                LOGE(TAG, "onRemoteMediaPlayerMetadataUpdated(): Failed to inform " + consumer, e);
+        synchronized (mVideoConsumers) {
+            for (IVideoCastConsumer consumer : mVideoConsumers) {
+                try {
+                    consumer.onRemoteMediaPlayerMetadataUpdated();
+                } catch (Exception e) {
+                    LOGE(TAG, "onRemoteMediaPlayerMetadataUpdated(): Failed to inform " + consumer,
+                            e);
+                }
             }
         }
         updateLockScreenMetadata();
@@ -1550,9 +1609,10 @@ public class VideoCastManager extends BaseCastManager
         }
     }
 
-    /*************************************************************************/
-    /************** RemoteControlClient management ***************************/
-    /*************************************************************************/
+    /*============================================================================================*/
+    /*========== RemoteControlClient management ==================================================*/
+    /*============================================================================================*/
+
     /*
      * Sets up the {@link RemoteControlClient} for this application. It also handles the audio
      * focus.
@@ -1615,7 +1675,7 @@ public class VideoCastManager extends BaseCastManager
                     }
                     mRemoteControlClientCompat.editMetadata(false).putBitmap(
                             RemoteControlClientCompat.MetadataEditorCompat.
-                            METADATA_KEY_ARTWORK, bm).apply();
+                                    METADATA_KEY_ARTWORK, bm).apply();
                 } catch (Exception e) {
                     LOGD(TAG, "Failed to update lock screen image", e);
                 }
@@ -1633,6 +1693,7 @@ public class VideoCastManager extends BaseCastManager
             return null;
         }
         URL imgUrl = null;
+        Bitmap bm = null;
         List<WebImage> images = video.getMetadata().getImages();
         try {
             if (Build.VERSION.SDK_INT > Build.VERSION_CODES.JELLY_BEAN_MR2) {
@@ -1640,24 +1701,28 @@ public class VideoCastManager extends BaseCastManager
                     imgUrl = new URL(images.get(1).getUrl().toString());
                 } else if (images.size() == 1) {
                     imgUrl = new URL(images.get(0).getUrl().toString());
+                } else if (null != mContext) {
+                    // we don't have a url for image so get a placeholder image from resources
+                    bm = BitmapFactory.decodeResource(mContext.getResources(),
+                            R.drawable.dummy_album_art_large);
                 }
             } else if (!images.isEmpty()) {
                 imgUrl = new URL(images.get(0).getUrl().toString());
+            } else {
+                // we don't have a url for image so get a placeholder image from resources
+                bm = BitmapFactory.decodeResource(mContext.getResources(),
+                        R.drawable.dummy_album_art_small);
             }
         } catch (MalformedURLException e) {
             LOGE(TAG, "Failed to get the url for images", e);
         }
-        Bitmap bm = null;
+
         if (null != imgUrl) {
             try {
                 bm = BitmapFactory.decodeStream(imgUrl.openStream());
             } catch (IOException e) {
                 LOGE(TAG, "Failed to decoded a bitmap for url: " + imgUrl, e);
             }
-        }
-
-        if (null == bm) {
-            bm = BitmapFactory.decodeResource(mContext.getResources(), R.drawable.dummy_album_art);
         }
 
         return bm;
@@ -1742,21 +1807,24 @@ public class VideoCastManager extends BaseCastManager
         }
     }
 
-    /*************************************************************/
-    /***** Registering IVideoCastConsumer listeners **************/
-    /*************************************************************/
+    /*============================================================================================*/
+    /*========== Registering IVideoCastConsumer listeners ========================================*/
+    /*============================================================================================*/
+
     /**
      * Registers an {@link IVideoCastConsumer} interface with this class. Registered listeners will
      * be notified of changes to a variety of lifecycle and media status changes through the
      * callbacks that the interface provides.
      *
-     * @see VideoCastConsumerImpl
      * @param listener
+     * @see VideoCastConsumerImpl
      */
     public synchronized void addVideoCastConsumer(IVideoCastConsumer listener) {
         if (null != listener) {
             super.addBaseCastConsumer(listener);
-            mVideoConsumers.add(listener);
+            synchronized (mVideoConsumers) {
+                mVideoConsumers.add(listener);
+            }
             LOGD(TAG, "Successfully added the new CastConsumer listener " + listener);
         }
     }
@@ -1769,13 +1837,15 @@ public class VideoCastManager extends BaseCastManager
     public synchronized void removeVideoCastConsumer(IVideoCastConsumer listener) {
         if (null != listener) {
             super.removeBaseCastConsumer(listener);
-            mVideoConsumers.remove(listener);
+            synchronized (mVideoConsumers) {
+                mVideoConsumers.remove(listener);
+            }
         }
     }
 
-    /*************************************************************/
-    /***** Registering IMiniController listeners *****************/
-    /*************************************************************/
+    /*============================================================================================*/
+    /*========== Registering IMiniController listeners ===========================================*/
+    /*============================================================================================*/
 
     /**
      * Adds a new {@link IMiniController} component. Callers need to provide their own
@@ -1785,10 +1855,13 @@ public class VideoCastManager extends BaseCastManager
      * @param OnMiniControllerChangedListener
      * @see setOnMiniControllerChangedListener
      */
-    public synchronized void addMiniController(IMiniController miniController,
+    public void addMiniController(IMiniController miniController,
             OnMiniControllerChangedListener onChangedListener) {
         if (null != miniController) {
-            boolean result = mMiniControllers.add(miniController);
+            boolean result = false;
+            synchronized (mMiniControllers) {
+                result = mMiniControllers.add(miniController);
+            }
             if (result) {
                 miniController.setOnMiniControllerChangedListener(null == onChangedListener ? this
                         : onChangedListener);
@@ -1816,7 +1889,7 @@ public class VideoCastManager extends BaseCastManager
      *
      * @param miniController
      */
-    public synchronized void addMiniController(IMiniController miniController) {
+    public void addMiniController(IMiniController miniController) {
         addMiniController(miniController, null);
     }
 
@@ -1825,28 +1898,31 @@ public class VideoCastManager extends BaseCastManager
      *
      * @param listener
      */
-    public synchronized void removeMiniController(IMiniController listener) {
+    public void removeMiniController(IMiniController listener) {
         if (null != listener) {
-            mMiniControllers.remove(listener);
+            synchronized (mMiniControllers) {
+                mMiniControllers.remove(listener);
+            }
         }
     }
 
-    /*************************************************************/
-    /***** Implementing abstract methods of BaseCastManager ******/
-    /*************************************************************/
+    /*============================================================================================*/
+    /*========== Implementing abstract methods of BaseCastManage =================================*/
+    /*============================================================================================*/
 
     @Override
     void onDeviceUnselected() {
         stopNotificationService();
         detachMediaChannel();
         removeDataChannel();
+        mState = MediaStatus.PLAYER_STATE_IDLE;
     }
 
     @Override
     Builder getCastOptionBuilder(CastDevice device) {
         Builder builder = Cast.CastOptions.builder(mSelectedCastDevice, new CastListener());
         if (isFeatureEnabled(FEATURE_DEBUGGING)) {
-            builder.setDebuggingEnabled();
+            builder.setVerboseLoggingEnabled(true);
         }
         return builder;
     }
@@ -1865,6 +1941,7 @@ public class VideoCastManager extends BaseCastManager
         updateMiniControllersVisibility(false);
         stopNotificationService();
         removeRemoteControlClient();
+        mState = MediaStatus.PLAYER_STATE_IDLE;
     }
 
     @Override
