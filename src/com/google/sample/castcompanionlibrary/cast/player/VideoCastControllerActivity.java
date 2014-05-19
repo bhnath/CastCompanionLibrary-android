@@ -16,9 +16,6 @@
 
 package com.google.sample.castcompanionlibrary.cast.player;
 
-import static com.google.sample.castcompanionlibrary.utils.LogUtils.LOGD;
-import static com.google.sample.castcompanionlibrary.utils.LogUtils.LOGE;
-
 import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
@@ -46,6 +43,9 @@ import com.google.sample.castcompanionlibrary.cast.exceptions.NoConnectionExcept
 import com.google.sample.castcompanionlibrary.cast.exceptions.TransientNetworkDisconnectionException;
 import com.google.sample.castcompanionlibrary.utils.LogUtils;
 import com.google.sample.castcompanionlibrary.utils.Utils;
+
+import static com.google.sample.castcompanionlibrary.utils.LogUtils.LOGD;
+import static com.google.sample.castcompanionlibrary.utils.LogUtils.LOGE;
 
 /**
  * This class provides an {@link Activity} that clients can easily add to their applications to
@@ -120,6 +120,8 @@ public class VideoCastControllerActivity extends ActionBarActivity implements IV
             mListener = mediaAuthFragment;
             mListener.onConfigurationChanged();
         }
+
+
     }
 
     @Override
@@ -275,7 +277,7 @@ public class VideoCastControllerActivity extends ActionBarActivity implements IV
         mLiveText.setVisibility(isLive ? View.VISIBLE : View.INVISIBLE);
         mStart.setVisibility(visibility);
         mEnd.setVisibility(visibility);
-        mSeekbar.setVisibility(visibility);
+        //mSeekbar.setVisibility(visibility);
     }
 
     @Override
@@ -322,10 +324,29 @@ public class VideoCastControllerActivity extends ActionBarActivity implements IV
 
     @Override
     public void updateSeekbar(int position, int duration) {
-        mSeekbar.setProgress(position);
-        mSeekbar.setMax(duration);
-        mStart.setText(Utils.formatMillis(position));
-        mEnd.setText(Utils.formatMillis(duration));
+        //mSeekbar.setProgress(position);
+        //mSeekbar.setMax(duration);
+        //mStart.setText(Utils.formatMillis(position));
+        //mEnd.setText(Utils.formatMillis(duration));
+        mSeekbar.setProgress(remotePosition);
+        mSeekbar.setMax(remoteDuration);
+        mStart.setText(Utils.formatMillis(remotePosition));
+        mEnd.setText(Utils.formatMillis(remoteDuration));
+    }
+
+    public void showSeekBar() {
+        mSeekbar.setVisibility(View.VISIBLE);
+    }
+
+    public void hideSeekBar() {
+        mSeekbar.setVisibility(View.INVISIBLE);
+    }
+
+    private int remotePosition;
+    private int remoteDuration;
+    public void setRemoteMediaDuration(int position, int duration) {
+        remotePosition = position;
+        remoteDuration = duration;
     }
 
     @SuppressWarnings("deprecation")

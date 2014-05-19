@@ -16,9 +16,6 @@
 
 package com.google.sample.castcompanionlibrary.cast;
 
-import static com.google.sample.castcompanionlibrary.utils.LogUtils.LOGD;
-import static com.google.sample.castcompanionlibrary.utils.LogUtils.LOGE;
-
 import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.content.ComponentName;
@@ -30,11 +27,13 @@ import android.graphics.BitmapFactory;
 import android.media.AudioManager;
 import android.media.MediaMetadataRetriever;
 import android.media.RemoteControlClient;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.support.v7.app.MediaRouteDialogFactory;
 import android.support.v7.media.MediaRouter.RouteInfo;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.View;
 
 import com.google.android.gms.cast.ApplicationMetadata;
@@ -82,6 +81,9 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import static com.google.sample.castcompanionlibrary.utils.LogUtils.LOGD;
+import static com.google.sample.castcompanionlibrary.utils.LogUtils.LOGE;
 
 /**
  * A concrete subclass of {@link BaseCastManager} that is suitable for casting video contents (it
@@ -148,6 +150,10 @@ public class VideoCastManager extends BaseCastManager
     private Cast.MessageReceivedCallback mDataChannel;
     private Set<IVideoCastConsumer> mVideoConsumers;
     private IMediaAuthService mAuthService;
+
+    private static Context remoteContext;
+    private boolean shouldShowRemoteSeekbar = false;
+    private boolean shouldHideRemoteSeekbar = false;
 
     /**
      * Initializes the VideoCastManager for clients. Before clients can use VideoCastManager, they
@@ -216,6 +222,12 @@ public class VideoCastManager extends BaseCastManager
             throw new CastException();
         }
         LOGD(TAG, "Updated context to: " + context.getClass().getName());
+
+        // Latch onto the VideoCastControllerActivity context so methods may be fired to it
+        // later.
+        if (context instanceof VideoCastControllerActivity) {
+            remoteContext = context;
+        }
         sInstance.mContext = context;
         return sInstance;
     }
@@ -406,8 +418,43 @@ public class VideoCastManager extends BaseCastManager
      * page
      */
     public void startCastControllerActivity(Context ctx,
-            MediaInfo mediaInfo, int position, boolean shouldStart) {
+                                            MediaInfo mediaInfo, int position, boolean shouldStart) {
+
+//        if(shouldSendRemoteDuration) {
+//            new setRemoteDurationTask().execute(remotePosition, remoteDuration);
+//        }
+        if(shouldHideRemoteSeekbar) {
+            new hideRemoteSeekbarTask().execute();
+        } else if (shouldShowRemoteSeekbar) {
+            new showRemoteSeekbarTask().execute();
+        }
         startCastControllerActivity(ctx, Utils.fromMediaInfo(mediaInfo), position, shouldStart);
+    }
+
+    public class hideRemoteSeekbarTask extends AsyncTask<Void, Integer, String>
+    {
+        @Override
+        protected String doInBackground(Void... params) {
+            try {
+                hideRemoteSeekbar();
+            } catch (Exception e) {
+                Log.e(TAG, e.getLocalizedMessage());
+            }
+            return null;
+        }
+    }
+
+    public class showRemoteSeekbarTask extends AsyncTask<Void, Integer, String>
+    {
+        @Override
+        protected String doInBackground(Void... params) {
+            try {
+                showRemoteSeekbar();
+            } catch (Exception e) {
+                Log.e(TAG, e.getLocalizedMessage());
+            }
+            return null;
+        }
     }
 
     /**
@@ -765,6 +812,67 @@ public class VideoCastManager extends BaseCastManager
         return mTargetActivity;
     }
 
+    public void queueRemoteSeekbarShow() {
+        shouldShowRemoteSeekbar = true;
+        shouldHideRemoteSeekbar = false;
+    }
+
+    public void queueRemoteSeekbarHide() {
+        shouldShowRemoteSeekbar = false;
+        shouldHideRemoteSeekbar = true;
+    }
+
+    private boolean shouldSendRemoteDuration = false;
+    private int remoteDuration = 0;
+    private int remotePosition = 0;
+
+    public void queueRemoteDuration(int position, int duration) {
+        Log.v(TAG, "OnProgress setting remote duration: " + duration);
+        shouldSendRemoteDuration = true;
+        remotePosition = position;
+        remoteDuration = duration;
+    }
+
+    public void showRemoteSeekbar() throws TransientNetworkDisconnectionException, NoConnectionException, InterruptedException {
+        while(remoteContext == null) {
+            Thread.sleep(100);
+        }
+        VideoCastControllerActivity activity = (VideoCastControllerActivity)remoteContext;
+        activity.showSeekBar();
+    }
+
+    public void hideRemoteSeekbar() throws TransientNetworkDisconnectionException, NoConnectionException, InterruptedException {
+        while(remoteContext == null) {
+            Thread.sleep(100);
+        }
+        VideoCastControllerActivity activity = (VideoCastControllerActivity)remoteContext;
+        activity.hideSeekBar();
+    }
+
+    public void setRemoteMediaDuration(int position, int duration) throws TransientNetworkDisconnectionException, NoConnectionException, InterruptedException {
+        Log.v(TAG, "OnProgress starting setRemoteDurationTask thread: " + duration);
+        new setRemoteDurationTask().execute(position, duration);
+    }
+
+    public class setRemoteDurationTask extends AsyncTask<Integer, Integer, String>
+    {
+        @Override
+        protected String doInBackground(Integer... params) {
+            int position = params[0];
+            int duration = params[1];
+            Log.v(TAG, "OnProgress duration from setRemoteTask: " + duration);
+            try {
+                while (remoteContext == null) {
+                    Thread.sleep(100);
+                }
+                VideoCastControllerActivity activity = (VideoCastControllerActivity)remoteContext;
+                activity.setRemoteMediaDuration(position, duration);
+            } catch (Exception e) {
+                Log.e(TAG, e.getLocalizedMessage());
+            }
+            return null;
+        }
+    }
     /*
      * This is called when ui visibility of the client has changed
      */
@@ -1980,5 +2088,4 @@ public class VideoCastManager extends BaseCastManager
         LOGD(TAG, "onFailed: " + mContext.getString(resourceId) + ", code: " + statusCode);
         super.onFailed(resourceId, statusCode);
     }
-
 }
