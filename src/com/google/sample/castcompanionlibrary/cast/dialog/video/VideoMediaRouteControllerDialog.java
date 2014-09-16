@@ -18,6 +18,18 @@ package com.google.sample.castcompanionlibrary.cast.dialog.video;
 
 import static com.google.sample.castcompanionlibrary.utils.LogUtils.LOGE;
 
+import com.google.android.gms.cast.MediaInfo;
+import com.google.android.gms.cast.MediaMetadata;
+import com.google.android.gms.cast.MediaStatus;
+import com.google.sample.castcompanionlibrary.R;
+import com.google.sample.castcompanionlibrary.cast.VideoCastManager;
+import com.google.sample.castcompanionlibrary.cast.callbacks.VideoCastConsumerImpl;
+import com.google.sample.castcompanionlibrary.cast.exceptions.CastException;
+import com.google.sample.castcompanionlibrary.cast.exceptions.NoConnectionException;
+import com.google.sample.castcompanionlibrary.cast.exceptions.TransientNetworkDisconnectionException;
+import com.google.sample.castcompanionlibrary.utils.FetchBitmapTask;
+import com.google.sample.castcompanionlibrary.utils.LogUtils;
+
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -30,19 +42,6 @@ import android.view.View;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-
-import com.google.android.gms.cast.MediaInfo;
-import com.google.android.gms.cast.MediaMetadata;
-import com.google.android.gms.cast.MediaStatus;
-import com.google.sample.castcompanionlibrary.R;
-import com.google.sample.castcompanionlibrary.cast.VideoCastManager;
-import com.google.sample.castcompanionlibrary.cast.callbacks.VideoCastConsumerImpl;
-import com.google.sample.castcompanionlibrary.cast.exceptions.CastException;
-import com.google.sample.castcompanionlibrary.cast.exceptions.NoConnectionException;
-import com.google.sample.castcompanionlibrary.cast.exceptions.TransientNetworkDisconnectionException;
-import com.google.sample.castcompanionlibrary.utils.LogUtils;
-
-import java.net.URL;
 
 /**
  * A custom {@link MediaRouteControllerDialog} that provides an album art, a play/pause button and
@@ -67,10 +66,11 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
     private Drawable mPlayDrawable;
     private Drawable mStopDrawable;
     private Context mContext;
-    private boolean mClosed;
     private View mIconContainer;
+    private View mTextContainer;
 
     private int mStreamType;
+    private FetchBitmapTask mFetchBitmap;
 
     public VideoMediaRouteControllerDialog(Context context, int theme) {
         super(context, theme);
@@ -80,6 +80,10 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
     protected void onStop() {
         if (null != mCastManager) {
             mCastManager.removeVideoCastConsumer(castConsumerImpl);
+        }
+        if (mFetchBitmap != null) {
+            mFetchBitmap.cancel(true);
+            mFetchBitmap = null;
         }
         super.onStop();
     }
@@ -130,8 +134,7 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
         int visibility = hide ? View.GONE : View.VISIBLE;
         mIcon.setVisibility(visibility);
         mIconContainer.setVisibility(visibility);
-        mTitle.setVisibility(visibility);
-        mSubTitle.setVisibility(visibility);
+        mTextContainer.setVisibility(visibility);
         mEmptyText.setText(resId == 0 ? R.string.no_media_info : resId);
         mEmptyText.setVisibility(hide ? View.VISIBLE : View.GONE);
         if (hide) mPausePlay.setVisibility(visibility);
@@ -170,33 +173,22 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
             mIcon.setImageBitmap(bm);
             return;
         }
-        new Thread(new Runnable() {
-            Bitmap bm = null;
 
+        if (mFetchBitmap != null) {
+            mFetchBitmap.cancel(true);
+        }
+
+        mFetchBitmap = new FetchBitmapTask() {
             @Override
-            public void run() {
-                try {
-                    URL imgUrl = new URL(mIconUri.toString());
-                    bm = BitmapFactory.decodeStream(imgUrl.openStream());
-                } catch (Exception e) {
-                    LOGE(TAG, "setIcon(): Failed to load the image with url: " +
-                            mIconUri + ", using the default one", e);
-                    bm = BitmapFactory.decodeResource(
-                            mContext.getResources(), R.drawable.video_placeholder_200x200);
+            protected void onPostExecute(Bitmap bitmap) {
+                mIcon.setImageBitmap(bitmap);
+                if (this == mFetchBitmap) {
+                    mFetchBitmap = null;
                 }
-                if (mClosed) {
-                    return;
-                }
-                mIcon.post(new Runnable() {
-
-                    @Override
-                    public void run() {
-                        mIcon.setImageBitmap(bm);
-                    }
-                });
-
             }
-        }).start();
+        };
+
+        mFetchBitmap.start(mIconUri);
     }
 
     private void updatePlayPauseState(int state) {
@@ -261,10 +253,10 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
         mLoading.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
-    private void adjustControlsVisibility(boolean showPlayPlause) {
-        int visible = showPlayPlause ? View.VISIBLE : View.INVISIBLE;
+    private void adjustControlsVisibility(boolean showPlayPause) {
+        int visible = showPlayPause ? View.VISIBLE : View.INVISIBLE;
         mPausePlay.setVisibility(visible);
-        setLoadingVisibility(!showPlayPlause);
+        setLoadingVisibility(!showPlayPause);
     }
 
     @Override
@@ -273,7 +265,10 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
         if (null != castConsumerImpl) {
             mCastManager.removeVideoCastConsumer(castConsumerImpl);
         }
-        mClosed = true;
+        if (mFetchBitmap != null) {
+            mFetchBitmap.cancel(true);
+            mFetchBitmap = null;
+        }
     }
 
     /**
@@ -322,26 +317,39 @@ public class VideoMediaRouteControllerDialog extends MediaRouteControllerDialog 
 
             @Override
             public void onClick(View v) {
-
-                if (null != mCastManager
-                        && null != mCastManager.getTargetActivity()) {
-                    try {
-                        mCastManager.onTargetActivityInvoked(mContext);
-                    } catch (TransientNetworkDisconnectionException e) {
-                        LOGE(TAG, "Failed to start the target activity due to network issues", e);
-                    } catch (NoConnectionException e) {
-                        LOGE(TAG, "Failed to start the target activity due to network issues", e);
-                    }
-                    cancel();
-                }
-
+                showTargetActivity();
             }
+
         });
+
+        mTextContainer.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+                showTargetActivity();
+            }
+
+        });
+    }
+
+    private void showTargetActivity() {
+        if (null != mCastManager
+                && null != mCastManager.getTargetActivity()) {
+            try {
+                mCastManager.onTargetActivityInvoked(mContext);
+            } catch (TransientNetworkDisconnectionException e) {
+                LOGE(TAG, "Failed to start the target activity due to network issues", e);
+            } catch (NoConnectionException e) {
+                LOGE(TAG, "Failed to start the target activity due to network issues", e);
+            }
+            cancel();
+        }
     }
 
     private void loadViews(View controls) {
         mIcon = (ImageView) controls.findViewById(R.id.iconView);
         mIconContainer = controls.findViewById(R.id.iconContainer);
+        mTextContainer = controls.findViewById(R.id.textContainer);
         mPausePlay = (ImageView) controls.findViewById(R.id.playPauseView);
         mTitle = (TextView) controls.findViewById(R.id.titleView);
         mSubTitle = (TextView) controls.findViewById(R.id.subTitleView);
